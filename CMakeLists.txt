@@ -14,4 +14,5 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 # Create executable from source files
 add_executable(kvstore 
     src/main.cpp
+    src/kvstore.cpp
 )
