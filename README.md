@@ -1,240 +1,290 @@
-# KVStore - Distributed Key-Value Store
+# KVStore - High-Performance Key-Value Store
 
-## Project Description
+A lightweight, thread-safe key-value storage system built in C++ with TCP networking support. Think of it as a simplified Redis - an in-memory database that stores data as key-value pairs accessible over a network.
 
-**KVStore** is a high-performance, distributed key-value storage system built from scratch in C++. Think of it as a mini-Redis or a simplified DynamoDB - a fast in-memory database that stores data as key-value pairs and can be accessed over a network.
+## Overview
+
+**KVStore** is an educational yet functional key-value store implementation demonstrating core concepts in systems programming, network architecture, and concurrent data structures. It provides a simple text-based protocol for storing, retrieving, and deleting string data.
 
 ### What is a Key-Value Store?
 
-A key-value store is like a giant hash map/dictionary that lives on a server:
-- **Key**: A unique identifier (like "user:123" or "session:abc")
-- **Value**: Any data associated with that key (user info, session data, etc.)
+A key-value store is a NoSQL database that uses a simple key-value method to store data:
+- **Key**: A unique identifier (e.g., "user:123", "session:abc")
+- **Value**: Data associated with that key (user info, session data, configuration, etc.)
 
-Real-world examples:
-- **Redis**: Used by Twitter, GitHub, Stack Overflow for caching
-- **DynamoDB**: Amazon's own key-value database powering AWS
-- **Memcached**: Used by Facebook, YouTube for fast data access
+**Real-world examples:**
+- **Redis**: Caching layer used by Twitter, GitHub, Stack Overflow
+- **Amazon DynamoDB**: AWS's managed NoSQL database service
+- **Memcached**: High-performance distributed memory caching system
 
-### Why Build This?
+## Features
 
-This project demonstrates critical skills that Amazon and other tech companies value:
+### Current Implementation (Phase 1)
+- ✅ **Core Operations**: GET, SET, DELETE commands
+- ✅ **TCP Server**: Network-accessible server on port 8000
+- ✅ **Thread Safety**: Concurrent access using read-write locks (`std::shared_mutex`)
+- ✅ **Size Limits**: Configurable maximum key (1KB) and value (1MB) sizes
+- ✅ **Multiple Clients**: Handles concurrent client connections
+- ✅ **Simple Protocol**: Text-based command protocol for easy debugging
 
-1. **Systems Programming**: Low-level C++ for performance-critical applications
-2. **Network Programming**: Building client-server architecture from scratch
-3. **Distributed Systems**: Understanding replication, consistency, and fault tolerance
-4. **Scalability**: Designing systems that handle thousands of requests
-5. **Data Structures**: Implementing efficient storage and retrieval mechanisms
+### Planned Features (Future Phases)
+- ⏳ **Persistence**: Disk-based storage with snapshots and append-only logs
+- ⏳ **TTL Support**: Automatic key expiration
+- ⏳ **Data Types**: Lists, sets, sorted sets, hashes
+- ⏳ **Replication**: Master-slave replication for high availability
+- ⏳ **Clustering**: Distributed storage with consistent hashing
+- ⏳ **Monitoring**: Metrics and health check endpoints
 
-### Project Phases
+## Architecture
 
-#### Phase 1: Basic In-Memory Store (Current)
-- Core GET/SET/DELETE operations
-- Simple TCP server
-- Command-line client
-- Thread-safe operations
+### Components
 
-#### Phase 2: Persistence & Advanced Features
-- Disk persistence (survive restarts)
-- Key expiration/TTL
-- Multiple data types (strings, lists, sets)
-- Basic replication
-
-#### Phase 3: Distributed System
-- Multiple server nodes
-- Consistent hashing for data distribution
-- Leader election
-- Replication and fault tolerance
-- Monitoring and metrics
-
-### Technical Architecture
-
-**Components we'll build:**
-- **Storage Engine**: In-memory hash table with thread-safe access
-- **Network Layer**: TCP server handling multiple client connections
-- **Protocol**: Simple text-based command protocol (like Redis)
-- **Client Library**: C++ client for interacting with the server
-- **Replication System**: Data sync across multiple nodes (Phase 3)
-
-### Learning Outcomes
-
-By building this project, you'll gain hands-on experience with:
-- **C++ Modern Features**: Smart pointers, move semantics, lambda functions
-- **Concurrency**: Mutexes, condition variables, thread pools
-- **Networking**: Sockets, TCP/IP, client-server communication
-- **Data Structures**: Hash tables, concurrent data structures
-- **System Design**: Thinking about performance, reliability, and scalability
-
----
-
-## Project Initialization
-
-### Development Environment
-
-**Operating System**: Fedora Linux  
-**Compiler**: GCC/G++ (GNU Compiler Collection)  
-**Build System**: CMake 3.15+  
-**Version Control**: Git
-
-### Initial Setup Steps
-
-#### 1. Installed Required Tools
-
-We verified/installed the essential development tools:
-
-```bash
-# C++ compiler (already installed)
-g++ --version
-
-# CMake build system
-sudo dnf install cmake
-cmake --version
-
-# Make build tool
-sudo dnf install make
-make --version
+```
+┌─────────────────┐
+│   TCP Client    │
+│  (telnet/nc)    │
+└────────┬────────┘
+         │ Commands (SET/GET/DEL)
+         ▼
+┌─────────────────┐
+│   TCP Server    │
+│   (Port 8000)   │
+├─────────────────┤
+│ Command Parser  │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│    KVStore      │
+│ (Thread-Safe)   │
+├─────────────────┤
+│  Hash Table     │
+│  (unordered_map)│
+│  Shared Mutex   │
+└─────────────────┘
 ```
 
-#### 2. Created Project Structure
+### Thread Safety
 
-Set up a clean, organized project directory:
+The KVStore uses `std::shared_mutex` for reader-writer locking:
+- **Multiple readers** can access data simultaneously
+- **Single writer** gets exclusive access during modifications
+- Ensures data consistency without sacrificing read performance
 
-```bash
-mkdir kvstore
-cd kvstore
+## Getting Started
 
-# Create folder structure
-mkdir src       # Source files (.cpp)
-mkdir include   # Header files (.hpp)
-mkdir build     # Build artifacts (gitignored)
-```
+### Prerequisites
 
-**Final structure:**
-```
-kvstore/
-├── CMakeLists.txt    # Build configuration
-├── .gitignore        # Git ignore rules
-├── src/              # Implementation files
-│   └── main.cpp
-├── include/          # Header files
-│   └── server.hpp
-└── build/            # Compiled output (gitignored)
-```
+- **Operating System**: Linux (tested on Fedora)
+- **Compiler**: GCC/G++ with C++17 support
+- **Build System**: CMake 3.15 or higher
+- **Network Tools**: `telnet`, `nc` (netcat), or custom TCP client
 
-#### 3. Configured Build System (CMakeLists.txt)
+### Building the Project
 
-Created `CMakeLists.txt` as the project's build configuration:
-
-```cmake
-cmake_minimum_required(VERSION 3.15)
-project(KVStore VERSION 1.0.0)
-
-# Use C++17 standard
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# Include header directories
-include_directories(${PROJECT_SOURCE_DIR}/include)
-
-# Build executable
-add_executable(kvstore 
-    src/main.cpp
-)
-```
-
-**What this does:**
-- Sets minimum CMake version requirement
-- Declares project name and version
-- Enforces C++17 standard (modern C++ features)
-- Tells compiler where to find header files
-- Defines which source files to compile and output name
-
-#### 4. Version Control Setup
-
-Initialized Git repository with appropriate ignore rules:
-
-```bash
-git init
-# Added .gitignore from GitHub C++ template
-```
-
-The `.gitignore` excludes:
-- `build/` directory (compiled artifacts)
-- Object files (`.o`)
-- Executables
-- IDE-specific files
-
-#### 5. Hello World Test
-
-Created initial `src/main.cpp` to verify build system:
-
-```cpp
-#include <iostream>
-
-int main() {
-    std::cout << "Hello from KVStore!" << std::endl;
-    return 0;
-}
-```
-
-**Build and run process:**
-```bash
-cd build
-cmake ..        # Configure: read CMakeLists.txt, generate build files
-make           # Compile: turn .cpp into executable
-./kvstore      # Run: execute the program
-```
-
-**Output:** `Hello from KVStore!` ✓
-
-### Build System Workflow
-
-The typical development cycle:
-
-1. **First time setup:**
+1. **Clone the repository** (if using Git):
    ```bash
+   git clone <repository-url>
+   cd kvstore
+   ```
+
+2. **Create build directory**:
+   ```bash
+   mkdir -p build
    cd build
+   ```
+
+3. **Configure with CMake**:
+   ```bash
    cmake ..
    ```
 
-2. **After code changes:**
+4. **Compile**:
    ```bash
-   make              # Recompile
-   ./kvstore         # Run
-   ```
-
-3. **Clean rebuild (if needed):**
-   ```bash
-   rm -rf build/*
-   cmake ..
    make
    ```
 
-### Key Concepts
 
-**CMake vs Make:**
-- **CMake**: Configuration tool, generates build instructions (run once or when CMakeLists.txt changes)
-- **Make**: Build tool, executes compilation (run after every code change)
+## Usage
 
-**Header vs Source files:**
-- **Headers (.hpp)**: Declarations, interfaces, what exists
-- **Source (.cpp)**: Implementations, actual code, how it works
+### Starting the Server
 
-**Build Directory:**
-- Keeps compiled files separate from source code
-- Easy to clean (just delete build/)
-- Standard practice in C++ projects
+```bash
+cd build
+./kvstore
+```
 
----
+The server starts and listens on port 8000. It runs in the foreground and accepts multiple concurrent connections.
 
-## Next Steps
+### Connecting to the Server
 
-Now that the project is initialized, we'll begin implementing Phase 1:
-1. Design the storage engine (in-memory hash table)
-2. Create the TCP server
-3. Implement basic commands (GET, SET, DELETE)
-4. Build a simple client to test it
+Use any TCP client to connect:
 
----
+**Using telnet:**
+```bash
+telnet localhost 8000
+```
 
-**Status**: ✅ Project initialized and verified  
-**Current Phase**: Beginning Phase 1 - Basic In-Memory Store
+**Using netcat:**
+```bash
+nc localhost 8000
+```
+
+### Command Protocol
+
+Commands are text-based, one per line:
+
+#### SET - Store a key-value pair
+```
+SET <key> <value>
+```
+**Example:**
+```
+SET username john_doe
+SET user:123 {"name":"John","age":30}
+```
+**Response:** `OK` on success
+
+#### GET - Retrieve a value
+```
+GET <key>
+```
+**Example:**
+```
+GET username
+```
+**Response:** The stored value or `(NULL)` if not found
+
+#### DEL - Delete a key
+```
+DEL <key>
+```
+**Example:**
+```
+DEL username
+```
+**Response:** `OK` if deleted, `(NULL)` if key didn't exist
+
+### Example Session
+
+```bash
+$ telnet localhost 8000
+Trying 127.0.0.1...
+Connected to localhost.
+
+SET mykey hello
+OK
+GET mykey
+hello
+SET counter 42
+OK
+GET counter
+42
+DEL mykey
+OK
+GET mykey
+(NULL)
+```
+
+## Current Project Structure
+
+```
+kvstore/
+├── CMakeLists.txt          # Build configuration
+├── README.md               # Project documentation
+├── include/                # Header files
+│   ├── kvstore.hpp        # Key-value store interface
+│   └── server.hpp         # TCP server interface
+├── src/                    # Implementation files
+│   ├── kvstore.cpp        # KVStore implementation
+│   ├── server.cpp         # TCP server implementation
+│   └── main.cpp           # Entry point
+└── build/                  # Build artifacts (generated)
+    └── kvstore            # Compiled executable
+```
+
+## Technical Details
+
+### KVStore Class
+
+```cpp
+class KVStore {
+public:
+    KVStore(size_t max_key_len = 1024, size_t max_value_len = 1 << 20);
+    
+    bool set(const std::string &key, const std::string &value);
+    std::optional<std::string> get(const std::string &key) const;
+    bool del(const std::string &key);
+    size_t size() const;
+};
+```
+
+- **Storage**: `std::unordered_map<std::string, std::string>`
+- **Concurrency**: `std::shared_mutex` for thread-safe operations
+- **Limits**: Max key size 1KB, max value size 1MB (configurable)
+
+### TCPServer Class
+
+```cpp
+class TCPServer {
+public:
+    TCPServer(int port, KVStore &store);
+    void start();  // Blocking call, accepts connections
+};
+```
+
+- **Protocol**: Plain text over TCP
+- **Port**: 8000 (default)
+- **Multi-client**: Spawns threads for each connection
+- **Blocking I/O**: Uses standard POSIX sockets
+
+## Development Roadmap
+
+### Phase 1: Basic In-Memory Store ✅
+- [x] Core GET/SET/DELETE operations
+- [x] TCP server with command parser
+- [x] Thread-safe concurrent access
+- [x] Basic error handling
+
+### Phase 2: Persistence & Advanced Features
+- [ ] Append-only file (AOF) for durability
+- [ ] Snapshot-based persistence (RDB)
+- [ ] Time-to-live (TTL) for keys
+- [ ] Multiple data types (lists, sets, hashes)
+- [ ] Transaction support (MULTI/EXEC)
+
+### Phase 3: Distributed System
+- [ ] Master-slave replication
+- [ ] Consistent hashing for data distribution
+- [ ] Cluster mode with multiple nodes
+- [ ] Raft consensus for leader election
+- [ ] Monitoring dashboard and metrics
+
+## Learning Objectives
+
+This project demonstrates:
+
+1. **Systems Programming**: Low-level C++ for high-performance applications
+2. **Network Programming**: Socket programming, client-server architecture
+3. **Concurrent Programming**: Mutexes, locks, thread-safe data structures
+4. **Data Structures**: Hash tables, memory management
+5. **Protocol Design**: Simple text-based network protocols
+6. **Build Systems**: CMake, compilation, linking
+
+## Performance Considerations
+
+- **In-memory only**: All data stored in RAM for maximum speed
+- **No persistence yet**: Data lost on server restart
+- **Linear search**: O(1) average-case for GET/SET/DEL operations
+- **Read-write locks**: Multiple concurrent readers, exclusive writers
+- **Connection overhead**: Each client spawns a new thread
+
+## License
+
+This is an educational project. Feel free to use and modify for learning purposes.
+
+## Resources
+
+- [Redis Protocol Specification](https://redis.io/docs/latest/develop/reference/protocol-spec/)
+- [POSIX Sockets Programming](https://beej.us/guide/bgnet/)
+- [C++ Concurrency in Action](https://www.manning.com/books/c-plus-plus-concurrency-in-action-second-edition)
