@@ -1,10 +1,14 @@
 # KVStore - High-Performance Key-Value Store
 
-A lightweight, thread-safe key-value storage system built in C++ with TCP networking support. Think of it as a simplified Redis - an in-memory database that stores data as key-value pairs accessible over a network.
+![Status](https://img.shields.io/badge/status-alpha-orange)
+![C++](https://img.shields.io/badge/C%2B%2B-17-blue)
+![Platform](https://img.shields.io/badge/platform-linux-lightgrey)
+
+A lightweight, thread-safe key-value storage system built in C++ with TCP networking support. Think of it as a simplified Redis - an in-memory database that stores data as key-value pairs accessible over the network.
 
 ## Overview
 
-**KVStore** is an educational yet functional key-value store implementation demonstrating core concepts in systems programming, network architecture, and concurrent data structures. It provides a simple text-based protocol for storing, retrieving, and deleting string data.
+**KVStore** is an educational yet functional key-value store implementation demonstrating core concepts in systems programming, network architecture, and concurrent data structures. It provides a simple Redis-like interface for storing and retrieving data in memory.
 
 ### What is a Key-Value Store?
 
@@ -82,10 +86,10 @@ The KVStore uses `std::shared_mutex` for reader-writer locking:
 
 ### Building the Project
 
-1. **Clone the repository** (if using Git):
+1. **Clone the repository**:
    ```bash
-   git clone <repository-url>
-   cd kvstore
+   git clone https://github.com/mohammad53eu/KVStore.git
+   cd KVStore
    ```
 
 2. **Create build directory**:
@@ -192,6 +196,7 @@ GET mykey
 kvstore/
 ├── CMakeLists.txt          # Build configuration
 ├── README.md               # Project documentation
+├── LICENSE                 # MIT License
 ├── include/                # Header files
 │   ├── kvstore.hpp        # Key-value store interface
 │   └── server.hpp         # TCP server interface
@@ -260,6 +265,16 @@ public:
 - [ ] Raft consensus for leader election
 - [ ] Monitoring dashboard and metrics
 
+## Contributing
+
+This is primarily a learning project, but feedback, suggestions, and issues are welcome! If you find a bug or have an idea for improvement:
+
+1. **Open an issue** to discuss the problem or feature
+2. **Fork the repository** and make your changes
+3. **Submit a pull request** with a clear description
+
+Feel free to use this project as a learning resource or starting point for your own key-value store implementation!
+
 ## Learning Objectives
 
 This project demonstrates:
@@ -281,10 +296,16 @@ This project demonstrates:
 
 ## License
 
-This is an educational project. Feel free to use and modify for learning purposes.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+This is an educational project created for learning systems programming concepts. Feel free to use, modify, and learn from it!
 
 ## Resources
 
 - [Redis Protocol Specification](https://redis.io/docs/latest/develop/reference/protocol-spec/)
 - [POSIX Sockets Programming](https://beej.us/guide/bgnet/)
 - [C++ Concurrency in Action](https://www.manning.com/books/c-plus-plus-concurrency-in-action-second-edition)
+
+---
+
+**Note**: This project is under active development. APIs and features may change as development progresses through the roadmap phases.
