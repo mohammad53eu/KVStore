@@ -8,6 +8,7 @@
 #include <sstream>
 
 
+// initialize the class variables
 TCPServer::TCPServer(int port, KVStore &store)
     : port_(port),
     server_fd_(-1),
@@ -27,6 +28,7 @@ void TCPServer::start(){
     // prepare address
     sockaddr_in addr;
     std::memset(&addr, 0, sizeof(addr));
+
 
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY; // 0.0.0.0
@@ -51,6 +53,7 @@ void TCPServer::start(){
 
     std::cout << "server listening on port " << port_ << std::endl;
 
+    
     while(running_){
         sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
@@ -106,16 +109,51 @@ void TCPServer::handle_client(int client_fd) {
 }
 
 
+/*
+tokenizes a command line, respecting quoted strings with spaces and escape 
+sequences (\\ and \"). returns a vector of parsed tokens suitable
+for command processing.
+*/
+static std::vector<std::string> tokenize(const std::string &line) {
+    
+    std::vector<std::string> tokens;
+    std::string current;
+    bool in_quotes = false;
+
+    for(size_t i = 0; i < line.size(); i++){
+
+        char c = line[i];
+
+        // handle escape inside quotes
+        if(c == '\\' && in_quotes && i + 1 < line.size()) {
+            current += line[i + 1];
+            i++;
+        } else if(c == '"') {
+            in_quotes = !in_quotes;
+        } else if(c == ' ' && !in_quotes) {
+            if(!current.empty()) {
+                tokens.push_back(current);
+                current.clear();
+            }
+        } else {
+            current += c;
+        }
+    }
+
+    if(!current.empty()) {
+        tokens.push_back(current);
+    }
+
+    return tokens;
+}
+
+
 void TCPServer::handle_command(int client_fd, const std::string& line) {
     std::cout << "Received: [" << line << "]" << std::endl;
 
-    std::istringstream iss(line);
-    std::vector<std::string> tokens;
+    auto tokens = tokenize(line);
     std::string token;
 
-    while (iss >> token) {
-        tokens.push_back(token);
-    }
 
     if (tokens.empty()) {   
         return;
@@ -123,12 +161,21 @@ void TCPServer::handle_command(int client_fd, const std::string& line) {
 
     std::string cmd = tokens[0];
     std::string response;
-
+    
+    /*
+    check whether the commad is SET / GET / DELETE.
+    if not any of them return an error to the sender
+    */
     if(cmd == "SET"){
         if(tokens.size() < 3) {
             response = "ERROR: SET requires a key and a value\n";
         } else {
-            store_.set(tokens[1], tokens[2]);
+            std::string value;
+            for(size_t i = 2; i < tokens.size(); i++){
+                if (i > 2) value += " ";
+                value += tokens[i];
+            }
+            store_.set(tokens[1], value);
             response = "OK\n";
         }
     } else if(cmd == "GET"){
