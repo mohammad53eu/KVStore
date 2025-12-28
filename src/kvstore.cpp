@@ -1,4 +1,5 @@
 #include "kvstore.hpp"
+#include <iostream>
 
 
 KVStore::KVStore(size_t max_key_len, size_t max_value_len)
@@ -8,29 +9,44 @@ KVStore::KVStore(size_t max_key_len, size_t max_value_len)
 
 bool KVStore::set(
     const std::string &key,
-    const std::string &value
+    const std::string &value,
+    std::optional<int> ttl_seconds
 ) {
     // size check
-    if(key.size() > max_key_len_ || value.size() > max_value_len_)
+    Entry entry;
+    entry.value = value;
+
+    if (key.size() > max_key_len_ || value.size() > max_value_len_)
         return false;
 
+    if (ttl_seconds) {
+        entry.expires_at = 
+            std::chrono::steady_clock::now() +
+            std::chrono::seconds(*ttl_seconds);
+    }
     std::unique_lock lock(mutex_);
 
-    data_[key] = value;
+    data_[key] = entry;
     return true;
 }
 
 
-std::optional<std::string> KVStore::get(const std::string &key) const {
 
-    std::shared_lock lock(mutex_);
+std::optional<std::string> KVStore::get(const std::string &key) {
+
+    std::unique_lock lock(mutex_);
 
     auto it = data_.find(key);
     
-    if(it == data_.end())
+    if (it == data_.end()){
         return std::nullopt;
+    }
     
-    return it->second;
+    if (is_expired(it -> second)) {
+        data_.erase(it);
+        return std::nullopt;
+    }
+    return it->second.value;
 }
 
 
@@ -47,4 +63,12 @@ size_t KVStore::size() const {
     std::shared_lock lock(mutex_);
 
     return data_.size();
+}
+
+bool KVStore::is_expired(const Entry& entry) const {
+    if (!entry.expires_at) {
+        return false;
+    }
+
+    return std::chrono::steady_clock::now() >= *entry.expires_at;
 }

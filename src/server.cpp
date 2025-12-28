@@ -166,23 +166,45 @@ void TCPServer::handle_command(int client_fd, const std::string& line) {
     check whether the commad is SET / GET / DELETE.
     if not any of them return an error to the sender
     */
-    if(cmd == "SET"){
-        if(tokens.size() < 3) {
-            response = "ERROR: SET requires a key and a value\n";
-        } else {
-            std::string value;
-            for(size_t i = 2; i < tokens.size(); i++){
-                if (i > 2) value += " ";
-                value += tokens[i];
+    if (cmd == "SET") {
+    if (tokens.size() < 3) {
+        response = "ERROR: SET requires a key and a value\n";
+    } else {
+        std::string key = tokens[1];
+
+        std::string value;
+        std::optional<int> ttl;
+
+        size_t i = 2;
+
+        // rebuild value until EX
+        for (; i < tokens.size(); i++) {
+            if (tokens[i] == "EX") {
+                break;
             }
-            store_.set(tokens[1], value);
-            response = "OK\n";
+            if (!value.empty()) value += " ";
+            value += tokens[i];
         }
+
+        // parse TTL if present
+        if (i < tokens.size()) {
+            if (tokens[i] == "EX" && i + 1 < tokens.size()) {
+                ttl = std::stoi(tokens[i + 1]);
+            } else {
+                response = "ERROR: invalid EX usage\n";
+                send(client_fd, response.c_str(), response.size(), 0);
+                return;
+            }
+        }
+
+        store_.set(key, value, ttl);
+        response = "OK\n";
+        }
+        
     } else if(cmd == "GET"){
         if(tokens.size() < 2) {
             response = "ERROR: GET requires a key\n";
         } else {
-
             auto value = store_.get(tokens[1]);
             if(value) {
                 response = *value + "\n";
