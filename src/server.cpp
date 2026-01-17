@@ -1,18 +1,20 @@
 #include "server.hpp"
-
 #include <iostream>
 #include <cstring>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <vector>
 #include <sstream>
+#include <persistence.hpp>
+#include "kvstore.hpp"
 
 
 // initialize the class variables
-TCPServer::TCPServer(int port, KVStore &store)
+TCPServer::TCPServer(int port, KVStore &store, PersistenceManager &file)
     : port_(port),
     server_fd_(-1),
     store_(store),
+    file_(file),
     running_(false) {}
 
 
@@ -196,7 +198,7 @@ void TCPServer::handle_command(int client_fd, const std::string& line) {
                 return;
             }
         }
-
+        file_.append_set(key, value, ttl);
         store_.set(key, value, ttl);
         response = "OK\n";
         }
@@ -217,7 +219,12 @@ void TCPServer::handle_command(int client_fd, const std::string& line) {
             response = "ERROR: DELETE requires a key\n";
         } else {
             bool deleted = store_.del(tokens[1]);
-            response = deleted ? "OK\n" : "NOT_FOUND\n";
+            if (deleted) {
+                file_.append_del(tokens[1]);
+                response = "OK\n";
+            } else {
+                response = "NOT_FOUND\n";
+            }
         }
     } else {
         response = "ERROR: unkown command\n";
