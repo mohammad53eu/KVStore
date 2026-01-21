@@ -18,7 +18,7 @@ TCPServer::TCPServer(int port, KVStore &store, PersistenceManager &file)
     running_(false) {}
 
 
-void TCPServer::start(){
+void TCPServer::start(std::atomic<bool> &running){
     
     // create the socket
     server_fd_= socket(AF_INET, SOCK_STREAM, 0);
@@ -27,7 +27,7 @@ void TCPServer::start(){
         return;
     }
 
-    // prepare address
+    // prepare address---
     sockaddr_in addr;
     std::memset(&addr, 0, sizeof(addr));
 
@@ -51,12 +51,32 @@ void TCPServer::start(){
     }
 
 
-    running_ = true;
-
     std::cout << "server listening on port " << port_ << std::endl;
 
     
-    while(running_){
+    while(running){
+        // select with timeout to check for incoming connections
+        fd_set read_fds;
+        FD_ZERO(&read_fds);
+        FD_SET(server_fd_, &read_fds);
+        
+        timeval timeout;
+        timeout.tv_sec = 1;  // 1 second timeout
+        timeout.tv_usec = 0;
+        
+        int result = select(server_fd_ + 1, &read_fds, nullptr, nullptr, &timeout);
+        
+        if(result < 0) {
+            perror("select");
+            break;
+        }
+        
+        if(result == 0) {
+            // timeout - no connection ready, loop back to check running flag
+            continue;
+        }
+        
+        // connection is ready to accept
         sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
         
@@ -76,8 +96,8 @@ void TCPServer::start(){
             this,
             client_fd
         ).detach();
-    }
-
+    } 
+    close(server_fd_);
 }
 
 void TCPServer::handle_client(int client_fd) {

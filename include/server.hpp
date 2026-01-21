@@ -15,7 +15,7 @@ public:
     TCPServer(int port, KVStore &store, PersistenceManager &file);
 
     // Start accepting clients (blocking)
-    void start();
+    void start(std::atomic<bool> &running);
 
     // Handle one connected client
     void handle_client(int client_fd);
@@ -29,5 +29,6 @@ public:
     int port_;
     int server_fd_;
     KVStore &store_;
+    // i am leaving it for now
     std::atomic<bool> running_;
 };
