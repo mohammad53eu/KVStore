@@ -110,3 +110,7 @@ void KVStore::stop_cleanup_thread() {
         std::cout << "Stopped cleanup thread\n";
     }
 }
+
+std::unordered_map<std::string, KVStore::Entry> KVStore::current_state() const{
+    return data_;
+}
