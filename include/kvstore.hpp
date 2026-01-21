@@ -5,6 +5,8 @@
 #include <optional>
 #include <shared_mutex>
 #include <mutex>
+#include <thread>
+#include <atomic>
 
 class KVStore {
 public:
@@ -28,6 +30,12 @@ public:
     // Number of stored keys
     size_t size() const;
 
+    
+    void start_cleanup_thread();
+
+    void stop_cleanup_thread();
+
+
 private:
     struct Entry {
         std::string value;
@@ -40,6 +48,9 @@ private:
     size_t max_key_len_;
     size_t max_value_len_;
 
+    std::thread cleaner_thread_;
+    std::atomic<bool> stop_cleaner_{false};
 
     bool is_expired(const Entry& entry) const;
+    void cleanup_expired();
 };
