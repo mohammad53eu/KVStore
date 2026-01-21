@@ -2,6 +2,8 @@
 
 #include <iostream>
 #include <optional>
+#include <thread>
+#include <atomic>
 
 /*
 this is a forward declaration:
@@ -12,19 +14,31 @@ class KVStore;
 
 class PersistenceManager {
     public:
-        PersistenceManager(const std::string& filename = "data.aof");
+        PersistenceManager(
+            const KVStore &store, 
+            const std::string& filename = "data.aof"
+        );
 
         void append_set(
             const std::string& key,
             const std::string& value,
             std::optional<int> ttl 
         );
-
+        
         void append_del(const std::string& key);
         
         // replay the commands in the file
         void replay(KVStore& store);
-
-    private:
+        
+        
+        void start_save_state_thread();
+        void stop_save_state_thread();
+        
+        private:
         std:: string filename_;
+        const KVStore &store_;
+        std::thread save_state_thread_;
+        std::atomic<bool> thread_should_stop_{false};
+        
+        void save_state();
 };

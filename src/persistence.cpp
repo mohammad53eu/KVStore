@@ -5,8 +5,9 @@
 #include <sstream>
 
 
-PersistenceManager::PersistenceManager(const std::string& filename)
-        : filename_(filename) {}
+PersistenceManager::PersistenceManager(const KVStore &store, const std::string& filename)
+        : store_(store),
+          filename_(filename) {}
 
 
 void PersistenceManager::append_set(
@@ -25,7 +26,7 @@ void PersistenceManager::append_set(
         file << "SET " << key << " " << value;
 
         if(ttl){
-                file << "EX " << *ttl;
+                file << " EX " << *ttl;
         }
 
         file << "\n";
@@ -36,7 +37,7 @@ void PersistenceManager::append_del(const std::string& key) {
         std::ofstream file(filename_, std::ios::app);
 
         if (!file.is_open()) {
-                std::cerr << "Failed to open AOF file for writing\n";
+                std::cerr << "Failed to open data.aof file for writing\n";
                 return;
         }
 
@@ -101,5 +102,74 @@ void PersistenceManager::replay(KVStore& store) {
                                 store.del(tokens[1]);
                         }
                 }       
+        }
+}
+
+
+void PersistenceManager::save_state() {
+
+        std::string temp_file = filename_ + ".temp";
+        std::ofstream file(temp_file, std::ios::trunc);
+
+        if (!file.is_open()) {
+                std::cerr << "Failed to open data.aof.temp for writing\n";
+                return;
+        }
+
+        const auto& data = store_.current_state();
+
+        if (data.empty()) {
+                std::cout << "no data to store in .temp file";
+                return;
+        }
+        
+        for (const auto & pair: data) {
+                file << "SET " << pair.first << " " << pair.second.value;
+                
+                if (pair.second.expires_at) {
+                        auto now = std::chrono::steady_clock::now();
+                        auto ttl = std::chrono::duration_cast<std::chrono::seconds>(
+                                *pair.second.expires_at - now
+                        ).count();
+                        
+                        if (ttl > 0) {
+                                file << " EX " << ttl;
+                        }
+                }
+
+                file << "\n";
+        }
+
+        file.close();
+
+        std::rename(temp_file.c_str(), filename_.c_str());
+}
+
+
+void PersistenceManager::start_save_state_thread() {
+
+        thread_should_stop_ = false;
+        /* 
+        will work on it later - the idea is to check the file size
+        and other things to decide if rewriting is worth it
+        */
+        // std::fstream file(filename_, std::ios::ate);
+
+        save_state_thread_ = std::thread([this]() {
+                while(!thread_should_stop_) {
+                        std::this_thread::sleep_for(std::chrono::seconds(15));
+                        PersistenceManager::save_state();
+                }
+        });
+}
+
+
+void PersistenceManager::stop_save_state_thread() {
+        thread_should_stop_ = true;
+
+        if (save_state_thread_.joinable()) {
+                save_state_thread_.join();
+                std::cout << "Stopped save_state thread\n";
+
         }
 }
