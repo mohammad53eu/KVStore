@@ -7,14 +7,21 @@
 #include <sstream>
 #include <persistence.hpp>
 #include "kvstore.hpp"
+#include <node_role.hpp>
 
 
 // initialize the class variables
-TCPServer::TCPServer(int port, KVStore &store, PersistenceManager &file)
+TCPServer::TCPServer(
+    int port,
+    KVStore &store,
+    PersistenceManager &file,
+    NodeRole role
+    )
     : port_(port),
     server_fd_(-1),
     store_(store),
     file_(file),
+    role_(role),
     running_(false) {}
 
 
@@ -189,38 +196,42 @@ void TCPServer::handle_command(int client_fd, const std::string& line) {
     if not any of them return an error to the sender
     */
     if (cmd == "SET") {
-    if (tokens.size() < 3) {
-        response = "ERROR: SET requires a key and a value\n";
-    } else {
-        std::string key = tokens[1];
-
-        std::string value;
-        std::optional<int> ttl;
-
-        size_t i = 2;
-
-        // rebuild value until EX
-        for (; i < tokens.size(); i++) {
-            if (tokens[i] == "EX") {
-                break;
-            }
-            if (!value.empty()) value += " ";
-            value += tokens[i];
+        if (role_ != NodeRole::Leader) {
+            response = "ERROR: read-only replica\n";
+            return;
         }
+        if (tokens.size() < 3) {
+            response = "ERROR: SET requires a key and a value\n";
+        } else {
+            std::string key = tokens[1];
 
-        // parse TTL if present
-        if (i < tokens.size()) {
-            if (tokens[i] == "EX" && i + 1 < tokens.size()) {
-                ttl = std::stoi(tokens[i + 1]);
-            } else {
+            std::string value;
+            std::optional<int> ttl;
+
+            size_t i = 2;
+
+            // rebuild value until EX
+            for (; i < tokens.size(); i++) {
+                if (tokens[i] == "EX") {
+                    break;
+                }
+                if (!value.empty()) value += " ";
+                value += tokens[i];
+            }
+
+            // parse TTL if present
+            if (i < tokens.size()) {
+                if (tokens[i] == "EX" && i + 1 < tokens.size()) {
+                    ttl = std::stoi(tokens[i + 1]);
+                } else {
                 response = "ERROR: invalid EX usage\n";
                 send(client_fd, response.c_str(), response.size(), 0);
                 return;
+                }
             }
-        }
-        file_.append_set(key, value, ttl);
-        store_.set(key, value, ttl);
-        response = "OK\n";
+            file_.append_set(key, value, ttl);
+            store_.set(key, value, ttl);
+            response = "OK\n";
         }
         
     } else if(cmd == "GET"){
@@ -235,6 +246,10 @@ void TCPServer::handle_command(int client_fd, const std::string& line) {
             }
         }
     } else if(cmd == "DELETE") {
+        if (role_ != NodeRole::Leader) {
+            response = "ERROR: read-only replica\n";
+            return;
+        }
         if(tokens.size() < 2) {
             response = "ERROR: DELETE requires a key\n";
         } else {

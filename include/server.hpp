@@ -5,14 +5,19 @@
 #include <atomic>
 #include <netinet/in.h>
 
-
+enum class NodeRole;
 class KVStore;
 class PersistenceManager;
 
 class TCPServer {
 public:
     // Create server listening on given port
-    TCPServer(int port, KVStore &store, PersistenceManager &file);
+    TCPServer(
+        int port, 
+        KVStore &store, 
+        PersistenceManager &file,
+        NodeRole role
+        );
 
     // Start accepting clients (blocking)
     void start(std::atomic<bool> &running);
@@ -29,6 +34,7 @@ public:
     int port_;
     int server_fd_;
     KVStore &store_;
+    NodeRole role_;
     // i am leaving it for now
     std::atomic<bool> running_;
 };
