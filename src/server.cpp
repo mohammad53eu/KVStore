@@ -198,6 +198,7 @@ void TCPServer::handle_command(int client_fd, const std::string& line) {
     if (cmd == "SET") {
         if (role_ != NodeRole::Leader) {
             response = "ERROR: read-only replica\n";
+            send(client_fd, response.c_str(), response.size(), 0);
             return;
         }
         if (tokens.size() < 3) {
@@ -248,6 +249,7 @@ void TCPServer::handle_command(int client_fd, const std::string& line) {
     } else if(cmd == "DELETE") {
         if (role_ != NodeRole::Leader) {
             response = "ERROR: read-only replica\n";
+            send(client_fd, response.c_str(), response.size(), 0);
             return;
         }
         if(tokens.size() < 2) {
