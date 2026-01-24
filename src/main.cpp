@@ -3,6 +3,7 @@
 #include "persistence.hpp"
 #include <csignal>
 #include <node_role.hpp>
+#include <replication.hpp>
 
 std::atomic<bool> running(true);
 
@@ -10,20 +11,29 @@ void handle_signal(int) {
     running = false;
 }
 
-NodeRole role = NodeRole::Leader;
 
 int main(int argc, char* argv[]) {
-    if (argc >= 2 && std::string(argv[1]) == "--follower") {
-    role = NodeRole::Follower;
-    }
-    KVStore store;
-    PersistenceManager file(store, "data.aof");
-    TCPServer server(8000, store, file, role);
     
+    KVStore store;
+    ReplicationManager replica(store);
+    NodeRole role = NodeRole::Leader;
+    if (argc >= 2 && std::string(argv[1]) == "--follower") {
+        role = NodeRole::Follower;
+        std::string leader_ip = (argc >= 3) ? argv[2] : "127.0.0.1";
+        int leader_port = (argc >= 4) ? std::stoi(argv[3]) : 8000;
+        replica.start_follower(leader_ip, leader_port);
+    }
+    
+    int port = (role == NodeRole::Leader)? 8000: 7000;
+
+    PersistenceManager file(store, "data.aof");
+    TCPServer server(port, store, file, role);
     file.replay(store);
 
 
-
+    if (role == NodeRole::Leader) {
+        replica.start_leader(8001);
+    }
 
     
     signal(SIGINT, handle_signal);
@@ -36,7 +46,5 @@ int main(int argc, char* argv[]) {
     store.stop_cleanup_thread();
     file.stop_save_state_thread();
 
-
-    
     return 0;
 }
