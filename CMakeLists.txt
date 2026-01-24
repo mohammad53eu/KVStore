@@ -17,4 +17,5 @@ add_executable(kvstore
     src/kvstore.cpp
     src/server.cpp
     src/persistence.cpp
+    src/replication.cpp
 )
