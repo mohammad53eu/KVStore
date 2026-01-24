@@ -8,20 +8,22 @@
 #include <persistence.hpp>
 #include "kvstore.hpp"
 #include <node_role.hpp>
-
+#include <replication.hpp>
 
 // initialize the class variables
 TCPServer::TCPServer(
     int port,
     KVStore &store,
     PersistenceManager &file,
-    NodeRole role
+    NodeRole role,
+    ReplicationManager &replica
     )
     : port_(port),
     server_fd_(-1),
     store_(store),
     file_(file),
     role_(role),
+    replica_(replica),
     running_(false) {}
 
 
@@ -230,6 +232,11 @@ void TCPServer::handle_command(int client_fd, const std::string& line) {
                 return;
                 }
             }
+
+            replica_.replicate_command(ttl ? 
+                "SET " + key + " " + value + " EX " + std::to_string(*ttl) + "\n" : 
+                "SET " + key + " " + value + "\n");
+
             file_.append_set(key, value, ttl);
             store_.set(key, value, ttl);
             response = "OK\n";
@@ -257,6 +264,7 @@ void TCPServer::handle_command(int client_fd, const std::string& line) {
         } else {
             bool deleted = store_.del(tokens[1]);
             if (deleted) {
+                replica_.replicate_command("DELETE " + tokens[1] + "\n");
                 file_.append_del(tokens[1]);
                 response = "OK\n";
             } else {

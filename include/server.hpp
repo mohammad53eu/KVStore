@@ -8,6 +8,7 @@
 enum class NodeRole;
 class KVStore;
 class PersistenceManager;
+class ReplicationManager;
 
 class TCPServer {
 public:
@@ -16,7 +17,8 @@ public:
         int port, 
         KVStore &store, 
         PersistenceManager &file,
-        NodeRole role
+        NodeRole role,
+        ReplicationManager &replica
         );
 
     // Start accepting clients (blocking)
@@ -35,6 +37,7 @@ public:
     int server_fd_;
     KVStore &store_;
     NodeRole role_;
+    ReplicationManager &replica_;
     // i am leaving it for now
     std::atomic<bool> running_;
 };
