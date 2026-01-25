@@ -15,12 +15,12 @@ void handle_signal(int) {
 int main(int argc, char* argv[]) {
     
     KVStore store;
-    ReplicationManager replica(store);
+    ReplicationManager replica(store, running);
     NodeRole role = NodeRole::Leader;
     if (argc >= 2 && std::string(argv[1]) == "--follower") {
         role = NodeRole::Follower;
         std::string leader_ip = (argc >= 3) ? argv[2] : "127.0.0.1";
-        int leader_port = (argc >= 4) ? std::stoi(argv[3]) : 8000;
+        int leader_port = (argc >= 4) ? std::stoi(argv[3]) : 8001;
         replica.start_follower(leader_ip, leader_port);
     }
     
@@ -45,6 +45,7 @@ int main(int argc, char* argv[]) {
     server.start(running);
     store.stop_cleanup_thread();
     file.stop_save_state_thread();
+    replica.stop();
 
     return 0;
 }
