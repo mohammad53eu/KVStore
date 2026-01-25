@@ -7,6 +7,7 @@
 #include <mutex>
 #include <thread>
 #include <atomic>
+#include <vector>
 
 class KVStore {
 public:
@@ -40,6 +41,14 @@ public:
     void start_cleanup_thread();
 
     void stop_cleanup_thread();
+    
+    struct SnapshotItem {
+        std::string key;
+        std::string value;
+        std::optional<int> ttl_seconds;
+    };
+    
+    std::vector<SnapshotItem> current_state_leader() const;
 
 
 private:

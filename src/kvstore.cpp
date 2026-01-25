@@ -2,6 +2,7 @@
 #include <iostream>
 
 
+
 KVStore::KVStore(size_t max_key_len, size_t max_value_len)
     : max_key_len_(max_key_len),
     max_value_len_(max_value_len){}
@@ -113,4 +114,39 @@ void KVStore::stop_cleanup_thread() {
 
 std::unordered_map<std::string, KVStore::Entry> KVStore::current_state() const{
     return data_;
+}
+
+
+std::vector<KVStore::SnapshotItem> KVStore::current_state_leader() const {
+
+    std::shared_lock lock(mutex_);
+
+    std::vector<SnapshotItem> snapshot;
+    auto now = std::chrono::steady_clock::now();
+
+
+    for (const auto& e: data_) {
+
+        if (e.second.expires_at && *e.second.expires_at <= now) {
+            continue;
+        }
+
+        SnapshotItem item;
+        item.key = e.first;
+        item.value = e.second.value;
+
+        if (e.second.expires_at) {
+            int ttl = std::chrono::duration_cast<std::chrono::seconds>(
+                *e.second.expires_at - now
+            ).count();
+
+            if (ttl > 0) {
+                item.ttl_seconds = ttl;
+            }
+        }
+
+        snapshot.emplace_back(item);
+    }
+
+    return snapshot;
 }
