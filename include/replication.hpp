@@ -14,7 +14,7 @@ class KVStore;
 class ReplicationManager {
     
     public:
-    ReplicationManager(KVStore &store);
+    ReplicationManager(KVStore &store, std::atomic<bool>& running);
     
     void start_leader(int port);
     
@@ -29,12 +29,14 @@ class ReplicationManager {
     
     private:
     KVStore& store_;
+    std::atomic<bool>& running_;
     std::vector<int> follower_sockets_;
     std::thread replication_thread_;
-    std::atomic<bool> running_{false};
+    int server_fd_{-1};
+    int follower_fd_{-1};
     std::mutex followers_mutex_;
     
         void leader_accept_loop(int port);
-        void follower_receive_loop(int socket_fd);
+        void follower_receive_loop(const std::string& leader_ip, int leader_port);
 };
 

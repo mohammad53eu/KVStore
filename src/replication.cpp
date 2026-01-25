@@ -7,16 +7,17 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sstream>
+#include <unordered_map>
 
-ReplicationManager::ReplicationManager(KVStore &store)
-    : store_(store) {}
+ReplicationManager::ReplicationManager(KVStore &store, std::atomic<bool>& running)
+    : store_(store), running_(running) {}
 
 
 
 void ReplicationManager::leader_accept_loop(int port) {
 
-    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd < 0) {
+    server_fd_ = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd_ < 0) {
         perror("replication socket");
         return;
     }
@@ -26,12 +27,12 @@ void ReplicationManager::leader_accept_loop(int port) {
     addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_port = htons(port);
 
-    if (bind(server_fd, (sockaddr*)&addr, sizeof(addr)) < 0) {
+    if (bind(server_fd_, (sockaddr*)&addr, sizeof(addr)) < 0) {
         perror("replication bind");
         return;
     }
 
-    if (listen(server_fd, 10) < 0) {
+    if (listen(server_fd_, 10) < 0) {
         perror("replication listen");
         return;
     }
@@ -42,7 +43,7 @@ void ReplicationManager::leader_accept_loop(int port) {
         sockaddr_in client{};
         socklen_t len = sizeof(client);
 
-        int follower_fd = accept(server_fd, (sockaddr*)&client, &len);
+        int follower_fd = accept(server_fd_, (sockaddr*)&client, &len);
 
         if (follower_fd < 0) {
             if (running_) {
@@ -51,14 +52,49 @@ void ReplicationManager::leader_accept_loop(int port) {
             continue;
         }
 
-        follower_sockets_.emplace_back(follower_fd);
-
         std::cout << "[REPL] follower connected\n";
+        
+        char buffer[128];
+        size_t n = recv(follower_fd, buffer, sizeof(buffer), 0);
+        
+        if (n <= 0) {
+            close(follower_fd);
+            return;
+        }
 
+        std::string msg(buffer, n);
 
+        if (msg != "SYNC\n") {
+            close(follower_fd);
+            return;
+        }
+
+        auto snapshot = store_.current_state_leader();
+
+        send(follower_fd, "SNAPSHOT_BEGIN\n", 15, 0);
+    
+        for (const auto& e : snapshot) {
+            std::string cmd = "SET " + e.key + " " + e.value;
+        
+            if (e.ttl_seconds) {
+                cmd += (" EX " + std::to_string(*e.ttl_seconds));
+            }
+
+            cmd += ("\n");
+            send(follower_fd, cmd.c_str(), cmd.size(), 0);
+        }
+    
+        send(follower_fd, "SNAPSHOT_END\n", 13, 0);
+
+        std::lock_guard<std::mutex> lock(followers_mutex_);
+
+        follower_sockets_.emplace_back(follower_fd);
     }
 
-    close(server_fd);
+    if (server_fd_ >= 0) {
+        close(server_fd_);
+        server_fd_ = -1;
+    }
 }
 
 
@@ -80,14 +116,10 @@ void ReplicationManager::replicate_command(const std::string& command) {
             ++it;
         }
     }
-
 }
 
 
 void ReplicationManager::start_leader(int port) {
-
-    running_ = true;
-
     replication_thread_ = std::thread(
         &ReplicationManager::leader_accept_loop,
         this,
@@ -126,54 +158,105 @@ void ReplicationManager::apply_replicate_command(const std::string& command) {
 }
 
 
+void ReplicationManager::follower_receive_loop(const std::string& leader_ip, int leader_port) {
+    while (running_) {
+        follower_fd_ = socket(AF_INET, SOCK_STREAM, 0);
+        if (follower_fd_ < 0) {
+            perror("replication socket");
+            return;
+        }
 
+        sockaddr_in server_addr{};
+        server_addr.sin_family = AF_INET;
+        server_addr.sin_addr.s_addr = inet_addr(leader_ip.c_str());
+        server_addr.sin_port = htons(leader_port);
+        
+        int connect_to_server = connect(follower_fd_, (sockaddr*)&server_addr, sizeof(server_addr));
 
-void ReplicationManager::start_follower(const std::string &leader_ip, int leader_port) {
+        if (connect_to_server < 0) {
+            perror("connect to leader");
+            return;
+        }
+        const char* sync = "SYNC\n";
+        send(follower_fd_, sync, strlen(sync), 0);
 
-    running_ = true;
+        std::cout << "client connected to leader\n";
 
-    replication_thread_ = std::thread([this, leader_ip, leader_port] () {
+        bool syncing = true;
+
         while (running_) {
-            int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-            if (socket_fd < 0) {
-                perror("replication socket");
-                return;
-            }
-    
-            sockaddr_in server_addr{};
-            server_addr.sin_family = AF_INET;
-            server_addr.sin_addr.s_addr = inet_addr(leader_ip.c_str());
-            server_addr.sin_port = htons(leader_port);
-            
-            int connect_to_server = connect(socket_fd, (sockaddr*)&server_addr, sizeof(server_addr));
-    
-            if (connect_to_server < 0) {
-                perror("connect to leader");
-                return;
+            char buffer[1024];
+            ssize_t bytes = recv(follower_fd_, buffer, sizeof(buffer), 0);
+
+            if (bytes < 0) {
+                std::cout << "[REPL] connection lost\n";
+                break;
             }
 
-            std::cout << "client connected to leader\n";
-    
-            while (running_) {
-                char buffer[1024];
-                ssize_t bytes = recv(socket_fd, buffer, sizeof(buffer), 0);
+            std::string command(buffer, bytes);
+            std::istringstream stream(command);
+            std::string line;
 
-                if (bytes < 0) {
-                    std::cout << "connection lost\n";
-                    break;
+            while (std::getline(stream, line)) {
+
+                if (line == "SNAPSHOT_BEGIN") {
+                    syncing = true;
+                    continue;
                 }
 
-                std::string command(buffer, bytes);
+                if (line == "SNAPSHOT_END") {
+                    syncing = false;
+                    std::cout << "[REPL] snapshot complete\n";
+                    continue;
+                }
+
                 apply_replicate_command(command);
-
             }
-
-            close(socket_fd);
         }
-    });
+
+        if (follower_fd_ >= 0) {
+            close(follower_fd_);
+            follower_fd_ = -1;
+        }
+    }
+}
+
+void ReplicationManager::start_follower(const std::string &leader_ip, int leader_port) {
+    replication_thread_ = std::thread(
+        &ReplicationManager::follower_receive_loop,
+        this,
+        leader_ip,
+        leader_port
+    );
 }
 
 void ReplicationManager::stop() {
+    running_ = false;
+    
+    // close server socket to unblock accept()
+    if (server_fd_ >= 0) {
+        shutdown(server_fd_, SHUT_RDWR);
+        close(server_fd_);
+        server_fd_ = -1;
+    }
+    
+    // close follower socket to unblock recv()
+    if (follower_fd_ >= 0) {
+        shutdown(follower_fd_, SHUT_RDWR);
+        close(follower_fd_);
+        follower_fd_ = -1;
+    }
+    
+    // close all follower sockets
+    {
+        std::lock_guard<std::mutex> lock(followers_mutex_);
+        for (int fd : follower_sockets_) {
+            shutdown(fd, SHUT_RDWR);
+            close(fd);
+        }
+        follower_sockets_.clear();
+    }
+    
     if (replication_thread_.joinable()) {
         replication_thread_.join();
         std::cout << "stopped replication thread\n";
