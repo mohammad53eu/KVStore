@@ -27,7 +27,7 @@ int main(int argc, char* argv[]) {
     int port = (role == NodeRole::Leader)? 8000: 7000;
 
     PersistenceManager file(store, "data.aof");
-    TCPServer server(port, store, file, role);
+    TCPServer server(port, store, file, role, replica);
     file.replay(store);
 
 
